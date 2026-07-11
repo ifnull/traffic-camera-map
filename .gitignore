@@ -1,0 +1,10 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Audit tool output
+camera_audit_output/
+
+# OS
+.DS_Store
