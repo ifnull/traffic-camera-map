@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Austin Traffic Cameras</title>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-J55TMWM013"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-J55TMWM013');
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <style>
+    :root {
+      --ink: #1a2332;
+      --muted: #5a6a7e;
+      --panel: rgba(255, 252, 248, 0.94);
+      --border: rgba(26, 35, 50, 0.12);
+      --accent: #0b6e4f;
+      --accent-soft: #d8f3e7;
+      --on: #0b6e4f;
+      --desired: #b45309;
+      --removed: #9b1c1c;
+      --void: #64748b;
+      --shadow: 0 12px 40px rgba(26, 35, 50, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      font-family: "DM Sans", system-ui, sans-serif;
+      color: var(--ink);
+      background: #e8eef4;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+    }
+
+    .menu-toggle {
+      display: none;
+      position: absolute;
+      z-index: 1200;
+      top: 16px;
+      left: 16px;
+      width: 44px;
+      height: 44px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      padding: 0;
+      color: var(--ink);
+      place-items: center;
+    }
+
+    .menu-toggle svg {
+      width: 22px;
+      height: 22px;
+      display: block;
+    }
+
+    .menu-toggle .icon-close { display: none; }
+    .menu-toggle[aria-expanded="true"] .icon-open { display: none; }
+    .menu-toggle[aria-expanded="true"] .icon-close { display: block; }
+
+    .menu-backdrop {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 1100;
+      background: rgba(15, 23, 42, 0.35);
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .topbar {
+      position: absolute;
+      z-index: 1000;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      gap: 12px;
+      align-items: stretch;
+      pointer-events: none;
+      max-width: 1100px;
+    }
+
+    .brand, .filters, .search {
+      pointer-events: auto;
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      border-radius: 14px;
+    }
+
+    .brand {
+      padding: 14px 18px;
+      min-width: 220px;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .brand .count {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.75rem;
+      color: var(--accent);
+      margin-top: 8px;
+    }
+
+    .panel-close {
+      display: none;
+    }
+
+    .search {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      min-width: 180px;
+    }
+
+    .search input {
+      width: 100%;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      font: inherit;
+      font-size: 0.95rem;
+      padding: 14px 4px;
+      color: var(--ink);
+    }
+
+    .search input::placeholder { color: #8a97a8; }
+
+    .filters {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px;
+      flex-wrap: wrap;
+    }
+
+    .filters-label {
+      display: none;
+    }
+
+    .filters button {
+      border: 1px solid transparent;
+      background: transparent;
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 8px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      color: var(--muted);
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+
+    .filters button:hover { background: rgba(26, 35, 50, 0.05); color: var(--ink); }
+
+    .filters button.active {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-color: rgba(11, 110, 79, 0.2);
+    }
+
+    .legend {
+      position: absolute;
+      z-index: 1000;
+      left: 16px;
+      bottom: 24px;
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 0.78rem;
+    }
+
+    .legend strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 5px 0;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      box-shadow: 0 0 0 2px #fff, 0 1px 3px rgba(0,0,0,0.25);
+    }
+
+    .dot.on { background: var(--on); }
+    .dot.desired { background: var(--desired); }
+    .dot.removed { background: var(--removed); }
+    .dot.void { background: var(--void); }
+
+    .cam-marker {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+    }
+
+    .locate-btn {
+      position: absolute;
+      z-index: 1000;
+      right: 16px;
+      bottom: 100px;
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      padding: 0;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .locate-btn:hover { background: #fff; color: var(--accent); }
+    .locate-btn:disabled { opacity: 0.6; cursor: wait; }
+    .locate-btn.active { color: #2563eb; }
+    .locate-btn svg { width: 20px; height: 20px; display: block; }
+
+    .locate-btn.locating svg {
+      animation: locate-spin 0.9s linear infinite;
+    }
+
+    @keyframes locate-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .user-location-marker {
+      width: 18px;
+      height: 18px;
+      position: relative;
+    }
+
+    .user-location-marker .pulse {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: rgba(37, 99, 235, 0.35);
+      animation: user-pulse 1.8s ease-out infinite;
+    }
+
+    .user-location-marker .core {
+      position: absolute;
+      inset: 3px;
+      border-radius: 50%;
+      background: #2563eb;
+      border: 2px solid #fff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    }
+
+    @keyframes user-pulse {
+      0% { transform: scale(0.7); opacity: 0.9; }
+      100% { transform: scale(2.2); opacity: 0; }
+    }
+
+    .locate-toast {
+      position: absolute;
+      z-index: 1100;
+      left: 50%;
+      bottom: 28px;
+      transform: translateX(-50%);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.82rem;
+      color: var(--ink);
+      max-width: min(360px, calc(100vw - 32px));
+      text-align: center;
+      display: none;
+    }
+
+    .locate-toast.visible { display: block; }
+
+    .marker-cluster-small,
+    .marker-cluster-medium,
+    .marker-cluster-large {
+      background: rgba(11, 110, 79, 0.18);
+    }
+
+    .marker-cluster-small div,
+    .marker-cluster-medium div,
+    .marker-cluster-large div {
+      background: var(--accent);
+      color: #fff;
+      font-family: "IBM Plex Mono", monospace;
+      font-weight: 500;
+    }
+
+    .leaflet-popup-content-wrapper {
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .leaflet-popup-content {
+      margin: 0;
+      width: 300px !important;
+      font-family: "DM Sans", system-ui, sans-serif;
+    }
+
+    .leaflet-popup-tip { box-shadow: none; }
+
+    .popup {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .popup-img-wrap {
+      position: relative;
+      background: #0f172a;
+      aspect-ratio: 16 / 10;
+      overflow: hidden;
+    }
+
+    .popup-img-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .popup-img-wrap .img-fallback {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .popup-body { padding: 12px 14px 14px; }
+
+    .popup-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      line-height: 1.25;
+      margin: 0 0 6px;
+      letter-spacing: -0.01em;
+    }
+
+    .status-pill {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 999px;
+      margin-bottom: 10px;
+    }
+
+    .status-pill.TURNED_ON { background: #d8f3e7; color: #0b6e4f; }
+    .status-pill.DESIRED { background: #ffedd5; color: #9a3412; }
+    .status-pill.REMOVED { background: #fee2e2; color: #991b1b; }
+    .status-pill.VOID { background: #e2e8f0; color: #475569; }
+
+    .popup-meta {
+      display: grid;
+      gap: 6px;
+      max-height: 180px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .meta-row {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 8px;
+      font-size: 0.75rem;
+      line-height: 1.35;
+    }
+
+    .meta-row dt {
+      margin: 0;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .meta-row dd {
+      margin: 0;
+      color: var(--ink);
+      word-break: break-word;
+    }
+
+    .popup-link {
+      display: inline-block;
+      margin-top: 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .popup-link:hover { text-decoration: underline; }
+
+    @media (max-width: 820px) {
+      .menu-toggle {
+        display: grid;
+      }
+
+      .menu-backdrop {
+        display: block;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+      }
+
+      body.menu-open .menu-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      body.menu-open .menu-toggle {
+        display: none;
+      }
+
+      .topbar {
+        top: 0;
+        left: 0;
+        right: auto;
+        bottom: 0;
+        width: min(340px, calc(100vw - 48px));
+        max-width: none;
+        flex-direction: column;
+        gap: 0;
+        padding: 0;
+        background: var(--panel);
+        backdrop-filter: blur(16px);
+        border-right: 1px solid var(--border);
+        box-shadow: var(--shadow);
+        border-radius: 0;
+        pointer-events: auto;
+        transform: translateX(-105%);
+        transition: transform 0.22s ease;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        z-index: 1150;
+      }
+
+      body.menu-open .topbar {
+        transform: translateX(0);
+      }
+
+      .brand, .filters, .search {
+        background: transparent;
+        backdrop-filter: none;
+        border: 0;
+        box-shadow: none;
+        border-radius: 0;
+      }
+
+      .brand {
+        min-width: 0;
+        padding: 20px 18px 16px;
+        border-bottom: 1px solid var(--border);
+        position: relative;
+      }
+
+      .panel-close {
+        display: grid;
+        place-items: center;
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        width: 36px;
+        height: 36px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        padding: 0;
+      }
+
+      .panel-close:hover {
+        background: rgba(26, 35, 50, 0.06);
+        color: var(--ink);
+      }
+
+      .panel-close svg {
+        width: 18px;
+        height: 18px;
+        display: block;
+      }
+
+      .brand h1 {
+        font-size: 1.1rem;
+        padding-right: 40px;
+      }
+
+      .search {
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+        min-width: 0;
+      }
+
+      .search input {
+        padding: 10px 0;
+        font-size: 1rem;
+      }
+
+      .filters {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        padding: 16px 18px 24px;
+      }
+
+      .filters-label {
+        display: block;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin-bottom: 2px;
+      }
+
+      .filters button {
+        width: 100%;
+        text-align: left;
+        padding: 12px 14px;
+        font-size: 0.9rem;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.55);
+      }
+
+      .filters button.active {
+        border-color: rgba(11, 110, 79, 0.28);
+      }
+
+      .legend { display: none; }
+
+      .leaflet-popup-content {
+        width: min(280px, calc(100vw - 48px)) !important;
+      }
+
+      .locate-toast {
+        bottom: 88px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <button
+    type="button"
+    class="menu-toggle"
+    id="menuToggle"
+    aria-expanded="false"
+    aria-controls="topbar"
+    title="Open menu"
+    aria-label="Open menu"
+  >
+    <svg class="icon-open" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+    </svg>
+    <svg class="icon-close" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+    </svg>
+  </button>
+  <button type="button" class="menu-backdrop" id="menuBackdrop" aria-label="Close menu" tabindex="-1"></button>
+
+  <div class="topbar" id="topbar">
+    <div class="brand">
+      <button type="button" class="panel-close" id="panelClose" aria-label="Close menu">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </button>
+      <h1>Austin Traffic Cameras</h1>
+      <p>City of Austin ATD camera network</p>
+      <div class="count" id="countLabel">Loading…</div>
+    </div>
+    <div class="search">
+      <input id="search" type="search" placeholder="Search location, street, landmark…" autocomplete="off" />
+    </div>
+    <div class="filters" id="filters">
+      <span class="filters-label">Camera status</span>
+      <button type="button" data-status="ALL" class="active">All</button>
+      <button type="button" data-status="TURNED_ON">On</button>
+      <button type="button" data-status="DESIRED">Desired</button>
+      <button type="button" data-status="REMOVED">Removed</button>
+      <button type="button" data-status="VOID">Void</button>
+    </div>
+  </div>
+
+  <div class="legend">
+    <strong>Status</strong>
+    <div class="legend-row"><span class="dot on"></span> Turned on</div>
+    <div class="legend-row"><span class="dot desired"></span> Desired</div>
+    <div class="legend-row"><span class="dot removed"></span> Removed</div>
+    <div class="legend-row"><span class="dot void"></span> Void</div>
+  </div>
+
+  <button
+    type="button"
+    class="locate-btn"
+    id="locateBtn"
+    title="Show my location"
+    aria-label="Show my location"
+  >
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="3.25" stroke="currentColor" stroke-width="2" />
+      <path d="M12 3v3.2M12 17.8V21M3 12h3.2M17.8 12H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+    </svg>
+  </button>
+  <div class="locate-toast" id="locateToast" role="status" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script>
+    const STATUS_COLORS = {
+      TURNED_ON: "#0b6e4f",
+      DESIRED: "#b45309",
+      REMOVED: "#9b1c1c",
+      VOID: "#64748b",
+    };
+
+    const FIELD_LABELS = [
+      ["id", "Camera ID"],
+      ["status", "Status"],
+      ["turnOnDate", "Turn on Date"],
+      ["manufacturer", "Manufacturer"],
+      ["atdLocationId", "ATD Location ID"],
+      ["landmark", "Landmark"],
+      ["signalArea", "Signal Area"],
+      ["councilDistrict", "Council District"],
+      ["jurisdiction", "Jurisdiction"],
+      ["locationType", "Location Type"],
+      ["primaryStreetBlock", "Primary Block"],
+      ["primaryStreet", "Primary Street"],
+      ["primaryStAka", "Primary AKA"],
+      ["crossStreetBlock", "Cross Block"],
+      ["crossStreet", "Cross Street"],
+      ["crossStAka", "Cross AKA"],
+      ["primaryStSegmentId", "Primary Seg ID"],
+      ["crossStSegmentId", "Cross Seg ID"],
+      ["coaIntersectionId", "Intersection ID"],
+      ["modifiedDate", "Modified"],
+      ["publishedScreenshots", "Published Shots"],
+      ["funding", "Funding"],
+      ["recordId", "Record ID"],
+      ["lat", "Latitude"],
+      ["lon", "Longitude"],
+    ];
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function statusColor(status) {
+      return STATUS_COLORS[status] || "#334155";
+    }
+
+    function trackEvent(name, params = {}) {
+      if (typeof gtag !== "function") return;
+      gtag("event", name, params);
+    }
+
+    function cameraEventParams(cam) {
+      return {
+        camera_id: cam.id || "",
+        camera_name: cam.name || "",
+        camera_status: cam.status || "",
+        signal_area: cam.signalArea || "",
+        council_district: cam.councilDistrict || "",
+      };
+    }
+
+    function buildPopup(cam) {
+      const rows = FIELD_LABELS
+        .map(([key, label]) => {
+          const value = cam[key];
+          if (value === undefined || value === null || value === "") return "";
+          return `<div class="meta-row"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+        })
+        .join("");
+
+      const img = cam.screenshot
+        ? `<img src="${escapeHtml(cam.screenshot)}" alt="Camera ${escapeHtml(cam.id)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="img-fallback">Preview unavailable</div>`
+        : `<div class="img-fallback" style="display:flex">No preview URL</div>`;
+
+      return `
+        <div class="popup" data-camera-id="${escapeHtml(cam.id)}">
+          <div class="popup-img-wrap">${img}</div>
+          <div class="popup-body">
+            <h3 class="popup-title">${escapeHtml(cam.name || "Unnamed camera")}</h3>
+            <span class="status-pill ${escapeHtml(cam.status)}">${escapeHtml(cam.status || "UNKNOWN")}</span>
+            <div class="popup-meta">${rows}</div>
+            ${cam.screenshot ? `<a class="popup-link" href="${escapeHtml(cam.screenshot)}" target="_blank" rel="noopener" data-camera-id="${escapeHtml(cam.id)}" data-camera-name="${escapeHtml(cam.name)}" data-camera-status="${escapeHtml(cam.status)}">Open full image</a>` : ""}
+          </div>
+        </div>
+      `;
+    }
+
+    function makeIcon(status) {
+      return L.divIcon({
+        className: "",
+        html: `<div class="cam-marker" style="background:${statusColor(status)}"></div>`,
+        iconSize: [14, 14],
+        iconAnchor: [7, 7],
+        popupAnchor: [0, -8],
+      });
+    }
+
+    const map = L.map("map", {
+      zoomControl: false,
+      minZoom: 9,
+    }).setView([30.2672, -97.7431], 11);
+
+    L.control.zoom({ position: "bottomright" }).addTo(map);
+
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+      subdomains: "abcd",
+      maxZoom: 20,
+    }).addTo(map);
+
+    const cluster = L.markerClusterGroup({
+      showCoverageOnHover: false,
+      maxClusterRadius: 48,
+      spiderfyOnMaxZoom: true,
+      disableClusteringAtZoom: 16,
+    });
+
+    const locateBtn = document.getElementById("locateBtn");
+    const locateToast = document.getElementById("locateToast");
+    let userMarker = null;
+    let userAccuracy = null;
+    let watchId = null;
+    let toastTimer = null;
+    let hasCenteredOnUser = false;
+
+    const userIcon = L.divIcon({
+      className: "",
+      html: '<div class="user-location-marker"><span class="pulse"></span><span class="core"></span></div>',
+      iconSize: [18, 18],
+      iconAnchor: [9, 9],
+    });
+
+    function showLocateToast(message) {
+      locateToast.textContent = message;
+      locateToast.classList.add("visible");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => locateToast.classList.remove("visible"), 4000);
+    }
+
+    function clearUserLocation() {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      if (userMarker) {
+        map.removeLayer(userMarker);
+        userMarker = null;
+      }
+      if (userAccuracy) {
+        map.removeLayer(userAccuracy);
+        userAccuracy = null;
+      }
+      locateBtn.classList.remove("active", "locating");
+      locateBtn.disabled = false;
+      hasCenteredOnUser = false;
+    }
+
+    function updateUserLocation(position, { center = false } = {}) {
+      const { latitude, longitude, accuracy } = position.coords;
+      const latLng = L.latLng(latitude, longitude);
+
+      if (!userMarker) {
+        userMarker = L.marker(latLng, {
+          icon: userIcon,
+          zIndexOffset: 1000,
+          interactive: false,
+        }).addTo(map);
+      } else {
+        userMarker.setLatLng(latLng);
+      }
+
+      if (!userAccuracy) {
+        userAccuracy = L.circle(latLng, {
+          radius: accuracy,
+          color: "#2563eb",
+          weight: 1,
+          opacity: 0.45,
+          fillColor: "#2563eb",
+          fillOpacity: 0.12,
+          interactive: false,
+        }).addTo(map);
+      } else {
+        userAccuracy.setLatLng(latLng);
+        userAccuracy.setRadius(accuracy);
+      }
+
+      locateBtn.classList.add("active");
+      locateBtn.classList.remove("locating");
+      locateBtn.disabled = false;
+
+      if (center || !hasCenteredOnUser) {
+        const zoom = Math.max(map.getZoom(), 14);
+        map.setView(latLng, zoom, { animate: true });
+        hasCenteredOnUser = true;
+      }
+    }
+
+    function locateError(error) {
+      locateBtn.classList.remove("locating");
+      locateBtn.disabled = false;
+
+      const messages = {
+        1: "Location permission denied. Allow location access in your browser settings.",
+        2: "Location unavailable. Try again outdoors or check device settings.",
+        3: "Location request timed out. Try again.",
+      };
+      showLocateToast(messages[error.code] || "Could not get your location.");
+    }
+
+    function startLocating() {
+      if (!navigator.geolocation) {
+        showLocateToast("Geolocation is not supported in this browser.");
+        trackEvent("locate_unsupported");
+        return;
+      }
+
+      if (watchId !== null) {
+        clearUserLocation();
+        showLocateToast("Location tracking stopped.");
+        trackEvent("locate_stop");
+        return;
+      }
+
+      locateBtn.classList.add("locating");
+      locateBtn.disabled = true;
+      hasCenteredOnUser = false;
+      trackEvent("locate_start");
+
+      watchId = navigator.geolocation.watchPosition(
+        (position) => updateUserLocation(position),
+        locateError,
+        {
+          enableHighAccuracy: true,
+          maximumAge: 10000,
+          timeout: 15000,
+        }
+      );
+    }
+
+    locateBtn.addEventListener("click", startLocating);
+
+    const menuToggle = document.getElementById("menuToggle");
+    const menuBackdrop = document.getElementById("menuBackdrop");
+    const panelClose = document.getElementById("panelClose");
+    const mobileMenuQuery = window.matchMedia("(max-width: 820px)");
+
+    function setMenuOpen(open) {
+      const wasOpen = document.body.classList.contains("menu-open");
+      if (wasOpen === open) return;
+      document.body.classList.toggle("menu-open", open);
+      menuToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      menuToggle.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+      menuToggle.title = open ? "Close menu" : "Open menu";
+      trackEvent(open ? "menu_open" : "menu_close");
+    }
+
+    function closeMenu() {
+      setMenuOpen(false);
+    }
+
+    function toggleMenu() {
+      setMenuOpen(!document.body.classList.contains("menu-open"));
+    }
+
+    menuToggle.addEventListener("click", toggleMenu);
+    menuBackdrop.addEventListener("click", closeMenu);
+    panelClose.addEventListener("click", closeMenu);
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeMenu();
+    });
+
+    mobileMenuQuery.addEventListener("change", (event) => {
+      if (!event.matches) closeMenu();
+    });
+
+    let allCameras = [];
+    let markersById = new Map();
+    let activeStatus = "ALL";
+    let searchQuery = "";
+
+    function matchesFilters(cam) {
+      if (activeStatus !== "ALL" && cam.status !== activeStatus) return false;
+      if (!searchQuery) return true;
+      const hay = [
+        cam.name,
+        cam.id,
+        cam.landmark,
+        cam.primaryStreet,
+        cam.crossStreet,
+        cam.atdLocationId,
+        cam.signalArea,
+        cam.jurisdiction,
+        cam.manufacturer,
+      ].join(" ").toLowerCase();
+      return hay.includes(searchQuery);
+    }
+
+    function refreshMarkers() {
+      cluster.clearLayers();
+      markersById.clear();
+      const visible = allCameras.filter(matchesFilters);
+
+      for (const cam of visible) {
+        const marker = L.marker([cam.lat, cam.lon], { icon: makeIcon(cam.status), title: cam.name });
+        marker.bindPopup(() => buildPopup(cam), { maxWidth: 320, minWidth: 280 });
+        marker.on("popupopen", () => {
+          trackEvent("camera_click", cameraEventParams(cam));
+        });
+        markersById.set(cam.id, marker);
+        cluster.addLayer(marker);
+      }
+
+      document.getElementById("countLabel").textContent =
+        `${visible.length.toLocaleString()} of ${allCameras.length.toLocaleString()} cameras shown`;
+    }
+
+    document.addEventListener("click", (event) => {
+      const link = event.target.closest("a.popup-link");
+      if (!link) return;
+      trackEvent("open_full_image", {
+        camera_id: link.dataset.cameraId || "",
+        camera_name: link.dataset.cameraName || "",
+        camera_status: link.dataset.cameraStatus || "",
+        link_url: link.href || "",
+      });
+    });
+
+    document.getElementById("filters").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-status]");
+      if (!button) return;
+      activeStatus = button.dataset.status;
+      for (const btn of document.querySelectorAll("#filters button")) {
+        btn.classList.toggle("active", btn === button);
+      }
+      trackEvent("filter_status", {
+        status_filter: activeStatus,
+      });
+      refreshMarkers();
+      if (mobileMenuQuery.matches) closeMenu();
+    });
+
+    let searchTimer;
+    document.getElementById("search").addEventListener("input", (event) => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        searchQuery = event.target.value.trim().toLowerCase();
+        refreshMarkers();
+        if (searchQuery.length >= 2) {
+          trackEvent("search", {
+            search_term: searchQuery.slice(0, 100),
+            result_count: allCameras.filter(matchesFilters).length,
+          });
+        }
+      }, 150);
+    });
+
+    fetch("cameras.json")
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load cameras.json");
+        return res.json();
+      })
+      .then((cameras) => {
+        allCameras = cameras;
+        map.addLayer(cluster);
+        refreshMarkers();
+        if (cameras.length) {
+          const bounds = L.latLngBounds(cameras.map((c) => [c.lat, c.lon]));
+          map.fitBounds(bounds.pad(0.05));
+        }
+      })
+      .catch((err) => {
+        document.getElementById("countLabel").textContent = "Could not load camera data";
+        console.error(err);
+      });
+  </script>
+</body>
+</html>
