@@ -1,10 +1,10 @@
-# Austin Traffic Camera Map
+# Austin Area Cameras
 
-An interactive web map that aggregates **every Austin-area public traffic camera into one place** — City of Austin ATD snapshots and TxDOT live video side by side — plus the tooling that builds and quality-checks the data.
+An interactive web map that aggregates **Austin-area public cameras into one place** — a general view of the area, traffic included. City of Austin ATD snapshots, TxDOT live traffic video, and curated public webcams (skylines, resorts, businesses) side by side, plus the tooling that builds and quality-checks the data.
 
-The map (`index.html`) is a single static page that plots every camera, filters by source, searches, and renders each feed in its native form: a JPEG snapshot for City cameras, a live HLS video stream for TxDOT cameras. A small Python pipeline turns each provider's raw data into one normalized `cameras.json`.
+The map (`index.html`) is a single static page that plots every camera, filters by source, searches, and renders each feed in its native form: a JPEG snapshot for City cameras, a live HLS video stream for TxDOT and most webcams, and an embedded player for iframe-only webcams. A small Python pipeline turns each provider's raw data into one normalized `cameras.json`.
 
-> **Status: proof of concept.** Two sources are unified end to end (1,231 cameras). The data refresh is manual and feed-health auditing currently covers only the City JPEG feeds. See [`ASSESSMENT.md`](./ASSESSMENT.md) for the evaluation and roadmap.
+> **Status: proof of concept.** Three sources are unified end to end (1,246 cameras). The data refresh is manual and feed-health auditing currently covers only the City JPEG feeds. See [`ASSESSMENT.md`](./ASSESSMENT.md) for the evaluation and roadmap.
 
 ## Repository layout
 
@@ -17,33 +17,39 @@ The map (`index.html`) is a single static page that plots every camera, filters 
 | `adapters/schema.py` | The normalized record shape + validation. |
 | `adapters/coa.py` | City of Austin adapter (JPEG snapshots). |
 | `adapters/txdot.py` | TxDOT adapter (HLS video, coordinates from MapLarge). |
-| `sources/` | Raw per-source inputs (`coa.json`, `txdot_raw.json`). |
+| `adapters/curated.py` | Curated public-webcam adapter (hand-maintained list). |
+| `sources/` | Per-source inputs (`coa.json`, `txdot_raw.json`, `curated.json`). |
 | `csv_to_cameras_json.py` | Converts a City CSV export into `sources/coa.json`. |
 | `audit_cameras.py` | Downloads and classifies City JPEG feeds (health check). |
 
 ## Architecture
 
 ```
-  City CSV ──► csv_to_cameras_json.py ──► sources/coa.json ──┐
-                                                             ├─► build.py ──► cameras.json ──► index.html
-  TxDOT MapLarge API ──► adapters/txdot.py ──► sources/txdot_raw.json ──┘
+  City CSV ──► csv_to_cameras_json.py ──► sources/coa.json ─────────┐
+                                                                    │
+  TxDOT MapLarge API ──► adapters/txdot.py ──► sources/txdot_raw.json ├─► build.py ──► cameras.json ──► index.html
+                                                                    │
+  Hand-maintained sources/curated.json ─────────────────────────────┘
 ```
 
 Every source normalizes into one record shape (`adapters/schema.py`):
 
 ```json
 {
-  "id": "coa-229" | "txdot-TX_AUS_001",
-  "source": "coa" | "txdot",
+  "id": "coa-229" | "txdot-TX_AUS_001" | "webcam-indeed",
+  "source": "coa" | "txdot" | "webcam",
   "name": "IH-35 @ 11th",
   "lat": 30.27, "lon": -97.73,
-  "feed": { "type": "image" | "hls", "url": "..." },
+  "feed": { "type": "image" | "hls" | "iframe", "url": "..." },
   "status": "TURNED_ON" | "ACTIVE" | ...,
   "meta": { "...source-specific fields shown in the popup..." }
 }
 ```
 
-`feed.type` is the field the map branches on. Adding a new provider (Travis County, UT, etc.) is one new file in `adapters/` plus a line in `build.py` — no schema change.
+`feed.type` is the field the map branches on (`image` → `<img>`, `hls` →
+hls.js `<video>`, `iframe` → embedded player). Adding a new provider (Travis
+County, UT, etc.) is one new file in `adapters/` plus a line in `build.py` — no
+schema change.
 
 ## Building the data
 
@@ -64,19 +70,24 @@ python3 build.py --pretty         # human-readable output
   ```
 - **TxDOT** — `build.py --refresh-txdot` re-queries the MapLarge camera table for the
   Austin district and refreshes `sources/txdot_raw.json`.
+- **Curated webcams** — edit `sources/curated.json` by hand: add an entry with its
+  feed URL, `feed_type` (`hls` or `iframe`), and a looked-up `lat`/`lon`. Set
+  `"include": false` to hold one back (e.g. missing coordinates). Then `python3 build.py`.
 
-Current dataset: **1,004 City** cameras + **227 TxDOT** cameras = **1,231 total**.
-Note: TxDOT's "Austin" jurisdiction is the whole district — it extends up the I-35
-corridor to the Bell County line, not just the metro.
+Current dataset: **1,004 City** + **227 TxDOT** + **15 webcams** = **1,246 total**.
+Note: the map spans the wider Austin area, not just the city — TxDOT's "Austin"
+jurisdiction runs up I-35 to the Bell County line, and curated webcams include
+spots like Horseshoe Bay and Lockhart. The initial view frames on central Austin.
 
 ## The map (`index.html`)
 
-- **All sources on one map** with marker clustering, colored by source (City = green, TxDOT = blue).
-- **Source filter** — All / City / TxDOT.
-- **Search** across name, ID, route, streets, landmark, and more.
-- **Native rendering per feed:** City cameras show a JPEG snapshot; TxDOT cameras play
-  live HLS video (via [hls.js](https://github.com/video-dev/hls.js), native on Safari)
-  with a "Live" badge. The stream is torn down when the popup closes.
+- **All sources on one map** with marker clustering, colored by source (City = green, TxDOT = blue, Webcams = orange).
+- **Source filter** — All / City / TxDOT / Webcams. City adds a contextual status sub-filter (On / Desired / Removed / Void) that only applies to City cameras.
+- **Search** across name, ID, route, streets, landmark, category, and more.
+- **Native rendering per feed:** City cameras show a JPEG snapshot; TxDOT and most
+  webcams play live HLS video (via [hls.js](https://github.com/video-dev/hls.js),
+  native on Safari) with a "Live" badge; iframe-only webcams embed their player.
+  Streams load on popup open and are torn down when it closes.
 - **"Locate me"** geolocation, responsive mobile panel, analytics.
 
 Serve the repo root with any static server (the map fetches `cameras.json` from the same directory):
@@ -115,5 +126,8 @@ optional `images/` / `suspect_images/`).
   portal); feeds are JPEG snapshots at `cctv.austinmobility.io`.
 - **TxDOT** Austin-district ITS cameras via the MapLarge `cameraPoint` table; feeds are
   HLS video from `skyvdn.com`. Coordinates come from the table's `XY` geometry column.
+- **Curated webcams** — public webcams (skylines, resorts, businesses) served as HLS
+  from `brownrice.com` or as embedded players from `wetmet.net`. Hand-maintained in
+  `sources/curated.json` with coordinates looked up per location.
 
-Refreshing either source is currently a manual step.
+Refreshing every source is currently a manual step.

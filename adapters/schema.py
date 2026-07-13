@@ -14,15 +14,16 @@ One schema for the map, so any new feed source is just another adapter:
     }
 
 ``feed.type`` is the one field the map branches on: ``image`` renders as an
-``<img>`` snapshot, ``hls`` renders as a live ``<video>`` via hls.js.
+``<img>`` snapshot, ``hls`` renders as a live ``<video>`` via hls.js, and
+``iframe`` renders as an embedded third-party player.
 """
 
 from __future__ import annotations
 
 from typing import Any, Iterable
 
-FEED_TYPES = {"image", "hls"}
-SOURCES = {"coa", "txdot"}
+FEED_TYPES = {"image", "hls", "iframe"}
+SOURCES = {"coa", "txdot", "webcam"}
 
 
 def record(

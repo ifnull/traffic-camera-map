@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Austin Traffic Cameras</title>
+  <title>Austin Area Cameras</title>
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-J55TMWM013"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -31,6 +31,7 @@
       --void: #64748b;
       --source-coa: #0b6e4f;
       --source-txdot: #2563eb;
+      --source-webcam: #ea580c;
       --shadow: 0 12px 40px rgba(26, 35, 50, 0.14);
     }
 
@@ -272,6 +273,7 @@
     .dot.void { background: var(--void); }
     .dot.city { background: var(--source-coa); }
     .dot.txdot { background: var(--source-txdot); }
+    .dot.webcam { background: var(--source-webcam); }
 
     .cam-marker {
       width: 14px;
@@ -465,6 +467,7 @@
 
     .source-pill.coa { background: #d8f3e7; color: #0b6e4f; }
     .source-pill.txdot { background: #dbeafe; color: #1d4ed8; }
+    .source-pill.webcam { background: #ffedd5; color: #c2410c; }
 
     .popup-video-wrap {
       position: relative;
@@ -741,8 +744,8 @@
           <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
         </svg>
       </button>
-      <h1>Austin Traffic Cameras</h1>
-      <p>City of Austin ATD camera network</p>
+      <h1>Austin Area Cameras</h1>
+      <p>Traffic and public webcams across the Austin area</p>
       <div class="count" id="countLabel">Loading…</div>
     </div>
     <div class="search">
@@ -754,6 +757,7 @@
         <button type="button" data-source="ALL" class="active">All</button>
         <button type="button" data-source="coa">City</button>
         <button type="button" data-source="txdot">TxDOT</button>
+        <button type="button" data-source="webcam">Webcams</button>
       </div>
       <div class="filters filters-sub" id="statusFilters" hidden>
         <span class="filters-label">City status</span>
@@ -770,6 +774,7 @@
     <strong>Source</strong>
     <div class="legend-row"><span class="dot city"></span> City of Austin (snapshot)</div>
     <div class="legend-row"><span class="dot txdot"></span> TxDOT (live video)</div>
+    <div class="legend-row"><span class="dot webcam"></span> Public webcam (live)</div>
   </div>
 
   <button
@@ -793,11 +798,13 @@
     const SOURCE_COLORS = {
       coa: "#0b6e4f",
       txdot: "#2563eb",
+      webcam: "#ea580c",
     };
 
     const SOURCE_LABELS = {
       coa: "City of Austin",
       txdot: "TxDOT",
+      webcam: "Webcam",
     };
 
     // Human labels for keys that can appear in a record's meta object.
@@ -806,6 +813,9 @@
       route: "Route",
       direction: "Direction",
       jurisdiction: "Jurisdiction",
+      category: "Category",
+      area: "Area",
+      note: "Note",
       turnOnDate: "Turn on Date",
       manufacturer: "Manufacturer",
       atdLocationId: "ATD Location ID",
@@ -852,7 +862,9 @@
       };
     }
 
-    // The media pane differs by feed type: image snapshot vs live HLS video.
+    // The media pane differs by feed type: image snapshot, live HLS video, or
+    // an embedded third-party player (iframe). Video and iframe sources load
+    // lazily on popup open (see refreshMarkers) so streams don't start early.
     function buildMedia(cam) {
       const feed = cam.feed || {};
       if (feed.type === "hls") {
@@ -862,6 +874,16 @@
             <video class="popup-video" muted playsinline preload="none"
                    data-hls-url="${escapeHtml(feed.url)}"></video>
             <div class="video-status">Loading live video…</div>
+          </div>`;
+      }
+      if (feed.type === "iframe") {
+        return `
+          <div class="popup-video-wrap">
+            <span class="live-badge">Live</span>
+            <iframe class="popup-embed" data-embed-url="${escapeHtml(feed.url)}"
+                    allow="autoplay; fullscreen" allowfullscreen loading="lazy"
+                    referrerpolicy="no-referrer"
+                    style="width:100%;height:100%;border:0;background:#0f172a"></iframe>
           </div>`;
       }
       if (feed.url) {
@@ -888,7 +910,10 @@
 
       const coords = `<div class="meta-row"><dt>Coordinates</dt><dd>${cam.lat.toFixed(5)}, ${cam.lon.toFixed(5)}</dd></div>`;
       const feedUrl = cam.feed && cam.feed.url;
-      const linkLabel = cam.feed && cam.feed.type === "hls" ? "Open live stream" : "Open full image";
+      const feedType = cam.feed && cam.feed.type;
+      const linkLabel = feedType === "hls" ? "Open live stream"
+        : feedType === "iframe" ? "Open live view"
+        : "Open full image";
 
       return `
         <div class="popup" data-camera-id="${escapeHtml(cam.id)}">
@@ -1144,6 +1169,8 @@
         cam.status,
         meta.code,
         meta.route,
+        meta.category,
+        meta.area,
         meta.landmark,
         meta.primaryStreet,
         meta.crossStreet,
@@ -1174,13 +1201,26 @@
         marker.bindPopup(() => buildPopup(cam), { maxWidth: 320, minWidth: 280 });
         marker.on("popupopen", (event) => {
           trackEvent("camera_click", cameraEventParams(cam));
-          const video = event.popup.getElement().querySelector("video[data-hls-url]");
+          const el = event.popup.getElement();
+          const video = el.querySelector("video[data-hls-url]");
           if (video) {
             teardownHls();
             activeHls = startHlsVideo(video);
           }
+          // Lazy-load the embedded player only when the popup is opened.
+          const iframe = el.querySelector("iframe[data-embed-url]");
+          if (iframe && !iframe.src) {
+            iframe.src = iframe.dataset.embedUrl;
+          }
         });
-        marker.on("popupclose", teardownHls);
+        marker.on("popupclose", (event) => {
+          teardownHls();
+          // Clear the embed so its stream stops when the popup closes.
+          const iframe = event.popup.getElement().querySelector("iframe[data-embed-url]");
+          if (iframe) {
+            iframe.removeAttribute("src");
+          }
+        });
         markersById.set(cam.id, marker);
         cluster.addLayer(marker);
       }

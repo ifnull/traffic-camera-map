@@ -16,7 +16,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from adapters import coa, schema, txdot
+from adapters import coa, curated, schema, txdot
 
 ROOT = Path(__file__).parent
 SOURCES = ROOT / "sources"
@@ -36,6 +36,7 @@ def main() -> int:
     records: list[dict] = []
     records += coa.load(SOURCES / "coa.json")
     records += txdot.load(cache=SOURCES / "txdot_raw.json", refresh=args.refresh_txdot)
+    records += curated.load(SOURCES / "curated.json")
 
     problems = schema.validate(records)
     if problems:
