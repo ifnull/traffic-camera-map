@@ -101,8 +101,8 @@ def main() -> None:
         "-o",
         "--output",
         type=Path,
-        default=Path("cameras.json"),
-        help="Output JSON path (default: cameras.json)",
+        default=Path("sources/coa.json"),
+        help="Output JSON path (default: sources/coa.json, the CoA adapter input)",
     )
     parser.add_argument(
         "--pretty",

@@ -29,6 +29,8 @@
       --desired: #b45309;
       --removed: #9b1c1c;
       --void: #64748b;
+      --source-coa: #0b6e4f;
+      --source-txdot: #2563eb;
       --shadow: 0 12px 40px rgba(26, 35, 50, 0.14);
     }
 
@@ -194,6 +196,38 @@
       border-color: rgba(11, 110, 79, 0.2);
     }
 
+    .filters-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: stretch;
+      pointer-events: none;
+    }
+
+    /* The status row only exists for City, so scope its color to City green. */
+    .filters-sub button.active {
+      background: var(--accent-soft);
+      color: var(--source-coa);
+      border-color: rgba(11, 110, 79, 0.2);
+    }
+
+    /* Label the contextual status row even on desktop so it reads as City-only. */
+    .filters-sub .filters-label {
+      display: block;
+      width: 100%;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 0 2px 2px;
+    }
+
+    /* .filters sets display:flex, which would override [hidden]; restore it. */
+    .filters[hidden] {
+      display: none;
+    }
+
     .legend {
       position: absolute;
       z-index: 1000;
@@ -236,6 +270,8 @@
     .dot.desired { background: var(--desired); }
     .dot.removed { background: var(--removed); }
     .dot.void { background: var(--void); }
+    .dot.city { background: var(--source-coa); }
+    .dot.txdot { background: var(--source-txdot); }
 
     .cam-marker {
       width: 14px;
@@ -408,10 +444,86 @@
       margin-bottom: 10px;
     }
 
-    .status-pill.TURNED_ON { background: #d8f3e7; color: #0b6e4f; }
+    .status-pill.TURNED_ON,
+    .status-pill.ACTIVE { background: #d8f3e7; color: #0b6e4f; }
     .status-pill.DESIRED { background: #ffedd5; color: #9a3412; }
-    .status-pill.REMOVED { background: #fee2e2; color: #991b1b; }
-    .status-pill.VOID { background: #e2e8f0; color: #475569; }
+    .status-pill.REMOVED,
+    .status-pill.PROBLEM { background: #fee2e2; color: #991b1b; }
+    .status-pill.VOID,
+    .status-pill.INACTIVE { background: #e2e8f0; color: #475569; }
+
+    .source-pill {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 999px;
+      margin: 0 6px 10px 0;
+    }
+
+    .source-pill.coa { background: #d8f3e7; color: #0b6e4f; }
+    .source-pill.txdot { background: #dbeafe; color: #1d4ed8; }
+
+    .popup-video-wrap {
+      position: relative;
+      background: #0f172a;
+      aspect-ratio: 16 / 10;
+      overflow: hidden;
+    }
+
+    .popup-video-wrap video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      background: #0f172a;
+    }
+
+    .popup-video-wrap .video-status {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      padding: 16px;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .live-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(15, 23, 42, 0.72);
+      color: #fff;
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 3px 7px;
+      border-radius: 6px;
+    }
+
+    .live-badge::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #ef4444;
+      animation: live-pulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes live-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
 
     .popup-meta {
       display: grid;
@@ -636,22 +748,28 @@
     <div class="search">
       <input id="search" type="search" placeholder="Search location, street, landmark…" autocomplete="off" />
     </div>
-    <div class="filters" id="filters">
-      <span class="filters-label">Camera status</span>
-      <button type="button" data-status="ALL" class="active">All</button>
-      <button type="button" data-status="TURNED_ON">On</button>
-      <button type="button" data-status="DESIRED">Desired</button>
-      <button type="button" data-status="REMOVED">Removed</button>
-      <button type="button" data-status="VOID">Void</button>
+    <div class="filters-stack">
+      <div class="filters" id="filters">
+        <span class="filters-label">Camera source</span>
+        <button type="button" data-source="ALL" class="active">All</button>
+        <button type="button" data-source="coa">City</button>
+        <button type="button" data-source="txdot">TxDOT</button>
+      </div>
+      <div class="filters filters-sub" id="statusFilters" hidden>
+        <span class="filters-label">City status</span>
+        <button type="button" data-status="ALL" class="active">All</button>
+        <button type="button" data-status="TURNED_ON">On</button>
+        <button type="button" data-status="DESIRED">Desired</button>
+        <button type="button" data-status="REMOVED">Removed</button>
+        <button type="button" data-status="VOID">Void</button>
+      </div>
     </div>
   </div>
 
   <div class="legend">
-    <strong>Status</strong>
-    <div class="legend-row"><span class="dot on"></span> Turned on</div>
-    <div class="legend-row"><span class="dot desired"></span> Desired</div>
-    <div class="legend-row"><span class="dot removed"></span> Removed</div>
-    <div class="legend-row"><span class="dot void"></span> Void</div>
+    <strong>Source</strong>
+    <div class="legend-row"><span class="dot city"></span> City of Austin (snapshot)</div>
+    <div class="legend-row"><span class="dot txdot"></span> TxDOT (live video)</div>
   </div>
 
   <button
@@ -670,41 +788,42 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
   <script>
-    const STATUS_COLORS = {
-      TURNED_ON: "#0b6e4f",
-      DESIRED: "#b45309",
-      REMOVED: "#9b1c1c",
-      VOID: "#64748b",
+    const SOURCE_COLORS = {
+      coa: "#0b6e4f",
+      txdot: "#2563eb",
     };
 
-    const FIELD_LABELS = [
-      ["id", "Camera ID"],
-      ["status", "Status"],
-      ["turnOnDate", "Turn on Date"],
-      ["manufacturer", "Manufacturer"],
-      ["atdLocationId", "ATD Location ID"],
-      ["landmark", "Landmark"],
-      ["signalArea", "Signal Area"],
-      ["councilDistrict", "Council District"],
-      ["jurisdiction", "Jurisdiction"],
-      ["locationType", "Location Type"],
-      ["primaryStreetBlock", "Primary Block"],
-      ["primaryStreet", "Primary Street"],
-      ["primaryStAka", "Primary AKA"],
-      ["crossStreetBlock", "Cross Block"],
-      ["crossStreet", "Cross Street"],
-      ["crossStAka", "Cross AKA"],
-      ["primaryStSegmentId", "Primary Seg ID"],
-      ["crossStSegmentId", "Cross Seg ID"],
-      ["coaIntersectionId", "Intersection ID"],
-      ["modifiedDate", "Modified"],
-      ["publishedScreenshots", "Published Shots"],
-      ["funding", "Funding"],
-      ["recordId", "Record ID"],
-      ["lat", "Latitude"],
-      ["lon", "Longitude"],
-    ];
+    const SOURCE_LABELS = {
+      coa: "City of Austin",
+      txdot: "TxDOT",
+    };
+
+    // Human labels for keys that can appear in a record's meta object.
+    const META_LABELS = {
+      code: "TxDOT ID",
+      route: "Route",
+      direction: "Direction",
+      jurisdiction: "Jurisdiction",
+      turnOnDate: "Turn on Date",
+      manufacturer: "Manufacturer",
+      atdLocationId: "ATD Location ID",
+      landmark: "Landmark",
+      signalArea: "Signal Area",
+      councilDistrict: "Council District",
+      locationType: "Location Type",
+      primaryStreet: "Primary Street",
+      crossStreet: "Cross Street",
+      primaryStAka: "Primary AKA",
+      crossStAka: "Cross AKA",
+      primaryStreetBlock: "Primary Block",
+      crossStreetBlock: "Cross Block",
+      coaIntersectionId: "Intersection ID",
+      modifiedDate: "Modified",
+      funding: "Funding",
+      recordId: "Record ID",
+    };
 
     function escapeHtml(value) {
       return String(value ?? "")
@@ -714,8 +833,8 @@
         .replaceAll('"', "&quot;");
     }
 
-    function statusColor(status) {
-      return STATUS_COLORS[status] || "#334155";
+    function sourceColor(source) {
+      return SOURCE_COLORS[source] || "#334155";
     }
 
     function trackEvent(name, params = {}) {
@@ -727,46 +846,104 @@
       return {
         camera_id: cam.id || "",
         camera_name: cam.name || "",
+        camera_source: cam.source || "",
         camera_status: cam.status || "",
-        signal_area: cam.signalArea || "",
-        council_district: cam.councilDistrict || "",
+        feed_type: (cam.feed && cam.feed.type) || "",
       };
     }
 
+    // The media pane differs by feed type: image snapshot vs live HLS video.
+    function buildMedia(cam) {
+      const feed = cam.feed || {};
+      if (feed.type === "hls") {
+        return `
+          <div class="popup-video-wrap">
+            <span class="live-badge">Live</span>
+            <video class="popup-video" muted playsinline preload="none"
+                   data-hls-url="${escapeHtml(feed.url)}"></video>
+            <div class="video-status">Loading live video…</div>
+          </div>`;
+      }
+      if (feed.url) {
+        return `
+          <div class="popup-img-wrap">
+            <img src="${escapeHtml(feed.url)}" alt="Camera ${escapeHtml(cam.id)}" loading="lazy"
+                 referrerpolicy="no-referrer"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+            <div class="img-fallback">Preview unavailable</div>
+          </div>`;
+      }
+      return `<div class="popup-img-wrap"><div class="img-fallback" style="display:flex">No preview available</div></div>`;
+    }
+
     function buildPopup(cam) {
-      const rows = FIELD_LABELS
-        .map(([key, label]) => {
-          const value = cam[key];
+      const meta = cam.meta || {};
+      const rows = Object.keys(META_LABELS)
+        .map((key) => {
+          const value = meta[key];
           if (value === undefined || value === null || value === "") return "";
-          return `<div class="meta-row"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+          return `<div class="meta-row"><dt>${escapeHtml(META_LABELS[key])}</dt><dd>${escapeHtml(value)}</dd></div>`;
         })
         .join("");
 
-      const img = cam.screenshot
-        ? `<img src="${escapeHtml(cam.screenshot)}" alt="Camera ${escapeHtml(cam.id)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="img-fallback">Preview unavailable</div>`
-        : `<div class="img-fallback" style="display:flex">No preview URL</div>`;
+      const coords = `<div class="meta-row"><dt>Coordinates</dt><dd>${cam.lat.toFixed(5)}, ${cam.lon.toFixed(5)}</dd></div>`;
+      const feedUrl = cam.feed && cam.feed.url;
+      const linkLabel = cam.feed && cam.feed.type === "hls" ? "Open live stream" : "Open full image";
 
       return `
         <div class="popup" data-camera-id="${escapeHtml(cam.id)}">
-          <div class="popup-img-wrap">${img}</div>
+          ${buildMedia(cam)}
           <div class="popup-body">
             <h3 class="popup-title">${escapeHtml(cam.name || "Unnamed camera")}</h3>
-            <span class="status-pill ${escapeHtml(cam.status)}">${escapeHtml(cam.status || "UNKNOWN")}</span>
-            <div class="popup-meta">${rows}</div>
-            ${cam.screenshot ? `<a class="popup-link" href="${escapeHtml(cam.screenshot)}" target="_blank" rel="noopener" data-camera-id="${escapeHtml(cam.id)}" data-camera-name="${escapeHtml(cam.name)}" data-camera-status="${escapeHtml(cam.status)}">Open full image</a>` : ""}
+            <span class="source-pill ${escapeHtml(cam.source)}">${escapeHtml(SOURCE_LABELS[cam.source] || cam.source)}</span>
+            ${cam.status ? `<span class="status-pill ${escapeHtml(cam.status)}">${escapeHtml(cam.status)}</span>` : ""}
+            <div class="popup-meta">${rows}${coords}</div>
+            ${feedUrl ? `<a class="popup-link" href="${escapeHtml(feedUrl)}" target="_blank" rel="noopener" data-camera-id="${escapeHtml(cam.id)}" data-camera-name="${escapeHtml(cam.name)}" data-camera-source="${escapeHtml(cam.source)}">${linkLabel}</a>` : ""}
           </div>
         </div>
       `;
     }
 
-    function makeIcon(status) {
+    function makeIcon(source) {
       return L.divIcon({
         className: "",
-        html: `<div class="cam-marker" style="background:${statusColor(status)}"></div>`,
+        html: `<div class="cam-marker" style="background:${sourceColor(source)}"></div>`,
         iconSize: [14, 14],
         iconAnchor: [7, 7],
         popupAnchor: [0, -8],
       });
+    }
+
+    // Attach an HLS stream to a popup's <video>, or fall back to native playback
+    // (Safari). Returns the Hls instance so it can be destroyed on popup close.
+    function startHlsVideo(video) {
+      const url = video.dataset.hlsUrl;
+      const statusEl = video.parentElement.querySelector(".video-status");
+      const hideStatus = () => { if (statusEl) statusEl.style.display = "none"; };
+      const showStatus = (msg) => { if (statusEl) { statusEl.textContent = msg; statusEl.style.display = "flex"; } };
+
+      video.play().catch(() => {});
+
+      if (window.Hls && window.Hls.isSupported()) {
+        const hls = new Hls({ maxBufferLength: 10, liveSyncDurationCount: 3 });
+        hls.loadSource(url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => { hideStatus(); video.play().catch(() => {}); });
+        hls.on(Hls.Events.ERROR, (_evt, data) => {
+          if (data && data.fatal) { showStatus("Stream unavailable"); hls.destroy(); }
+        });
+        return hls;
+      }
+
+      if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = url;
+        video.addEventListener("loadedmetadata", () => { hideStatus(); video.play().catch(() => {}); });
+        video.addEventListener("error", () => showStatus("Stream unavailable"));
+        return null;
+      }
+
+      showStatus("Live video not supported in this browser");
+      return null;
     }
 
     const map = L.map("map", {
@@ -950,37 +1127,60 @@
 
     let allCameras = [];
     let markersById = new Map();
-    let activeStatus = "ALL";
+    let activeSource = "ALL";
+    let activeStatus = "ALL";   // City-only sub-filter; ignored unless source is City
     let searchQuery = "";
+    let activeHls = null;   // Hls instance for the currently open video popup
 
     function matchesFilters(cam) {
-      if (activeStatus !== "ALL" && cam.status !== activeStatus) return false;
+      if (activeSource !== "ALL" && cam.source !== activeSource) return false;
+      // Status tags exist only on City cameras, so only apply when viewing City.
+      if (activeSource === "coa" && activeStatus !== "ALL" && cam.status !== activeStatus) return false;
       if (!searchQuery) return true;
+      const meta = cam.meta || {};
       const hay = [
         cam.name,
         cam.id,
-        cam.landmark,
-        cam.primaryStreet,
-        cam.crossStreet,
-        cam.atdLocationId,
-        cam.signalArea,
-        cam.jurisdiction,
-        cam.manufacturer,
-      ].join(" ").toLowerCase();
+        cam.status,
+        meta.code,
+        meta.route,
+        meta.landmark,
+        meta.primaryStreet,
+        meta.crossStreet,
+        meta.atdLocationId,
+        meta.signalArea,
+        meta.jurisdiction,
+        meta.manufacturer,
+      ].filter(Boolean).join(" ").toLowerCase();
       return hay.includes(searchQuery);
     }
 
+    // Stop and release the live stream tied to a closing popup.
+    function teardownHls() {
+      if (activeHls) {
+        activeHls.destroy();
+        activeHls = null;
+      }
+    }
+
     function refreshMarkers() {
+      teardownHls();
       cluster.clearLayers();
       markersById.clear();
       const visible = allCameras.filter(matchesFilters);
 
       for (const cam of visible) {
-        const marker = L.marker([cam.lat, cam.lon], { icon: makeIcon(cam.status), title: cam.name });
+        const marker = L.marker([cam.lat, cam.lon], { icon: makeIcon(cam.source), title: cam.name });
         marker.bindPopup(() => buildPopup(cam), { maxWidth: 320, minWidth: 280 });
-        marker.on("popupopen", () => {
+        marker.on("popupopen", (event) => {
           trackEvent("camera_click", cameraEventParams(cam));
+          const video = event.popup.getElement().querySelector("video[data-hls-url]");
+          if (video) {
+            teardownHls();
+            activeHls = startHlsVideo(video);
+          }
         });
+        marker.on("popupclose", teardownHls);
         markersById.set(cam.id, marker);
         cluster.addLayer(marker);
       }
@@ -992,24 +1192,55 @@
     document.addEventListener("click", (event) => {
       const link = event.target.closest("a.popup-link");
       if (!link) return;
-      trackEvent("open_full_image", {
+      trackEvent("open_feed", {
         camera_id: link.dataset.cameraId || "",
         camera_name: link.dataset.cameraName || "",
-        camera_status: link.dataset.cameraStatus || "",
+        camera_source: link.dataset.cameraSource || "",
         link_url: link.href || "",
       });
     });
 
+    const statusFilters = document.getElementById("statusFilters");
+
+    function resetStatusFilter() {
+      activeStatus = "ALL";
+      for (const btn of statusFilters.querySelectorAll("button")) {
+        btn.classList.toggle("active", btn.dataset.status === "ALL");
+      }
+    }
+
     document.getElementById("filters").addEventListener("click", (event) => {
-      const button = event.target.closest("button[data-status]");
+      const button = event.target.closest("button[data-source]");
       if (!button) return;
-      activeStatus = button.dataset.status;
+      activeSource = button.dataset.source;
       for (const btn of document.querySelectorAll("#filters button")) {
         btn.classList.toggle("active", btn === button);
       }
-      trackEvent("filter_status", {
-        status_filter: activeStatus,
-      });
+
+      // Status tags only apply to City, so reveal the sub-row for City and
+      // reset+hide it for everything else.
+      if (activeSource === "coa") {
+        statusFilters.hidden = false;
+      } else {
+        statusFilters.hidden = true;
+        resetStatusFilter();
+      }
+
+      trackEvent("filter_source", { source_filter: activeSource });
+      refreshMarkers();
+      // On mobile, keep the panel open when selecting City so the status row
+      // that just appeared is reachable; close for terminal choices.
+      if (mobileMenuQuery.matches && activeSource !== "coa") closeMenu();
+    });
+
+    statusFilters.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-status]");
+      if (!button) return;
+      activeStatus = button.dataset.status;
+      for (const btn of statusFilters.querySelectorAll("button")) {
+        btn.classList.toggle("active", btn === button);
+      }
+      trackEvent("filter_status", { status_filter: activeStatus });
       refreshMarkers();
       if (mobileMenuQuery.matches) closeMenu();
     });
@@ -1038,8 +1269,14 @@
         allCameras = cameras;
         map.addLayer(cluster);
         refreshMarkers();
-        if (cameras.length) {
-          const bounds = L.latLngBounds(cameras.map((c) => [c.lat, c.lon]));
+        // Frame the initial view on central Austin using the City cameras (all
+        // within the metro). TxDOT's district runs ~60mi up I-35, so fitting to
+        // every camera would zoom out to Killeen; those cams stay on the map,
+        // just outside the landing view. Fall back to all cameras if no City.
+        const framing = cameras.filter((c) => c.source === "coa");
+        const framed = framing.length ? framing : cameras;
+        if (framed.length) {
+          const bounds = L.latLngBounds(framed.map((c) => [c.lat, c.lon]));
           map.fitBounds(bounds.pad(0.05));
         }
       })

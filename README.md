@@ -1,130 +1,119 @@
 # Austin Traffic Camera Map
 
-An interactive web map of the City of Austin ATD traffic-camera network, plus the
-tooling that builds and quality-checks its data.
+An interactive web map that aggregates **every Austin-area public traffic camera into one place** — City of Austin ATD snapshots and TxDOT live video side by side — plus the tooling that builds and quality-checks the data.
 
-The public-facing piece is a single static page (`index.html`) that plots every
-camera on a Leaflet map, lets you search and filter by status, and shows a live
-screenshot preview in each camera's popup. Behind it sit two Python utilities: one
-that converts the city's CSV export into the map's data file, and one that audits
-the camera feeds to find dead, black, or frozen images.
+The map (`index.html`) is a single static page that plots every camera, filters by source, searches, and renders each feed in its native form: a JPEG snapshot for City cameras, a live HLS video stream for TxDOT cameras. A small Python pipeline turns each provider's raw data into one normalized `cameras.json`.
 
-> **Status: proof of concept.** The map and tooling work end to end, but the data
-> pipeline is manual and the feed audit is not yet wired into the map. See
-> [`ASSESSMENT.md`](./ASSESSMENT.md) for a full evaluation and roadmap.
+> **Status: proof of concept.** Two sources are unified end to end (1,231 cameras). The data refresh is manual and feed-health auditing currently covers only the City JPEG feeds. See [`ASSESSMENT.md`](./ASSESSMENT.md) for the evaluation and roadmap.
 
 ## Repository layout
 
-| File | Purpose |
+| Path | Purpose |
 | --- | --- |
-| `index.html` | The map. Self-contained HTML/CSS/JS, no build step. Loads `cameras.json` at runtime. |
-| `cameras.json` | Camera dataset the map reads (1,004 records). Generated from the city CSV. |
-| `csv_to_cameras_json.py` | Converts an Austin traffic-camera CSV export into `cameras.json`. |
-| `audit_cameras.py` | Downloads and analyzes each camera's screenshot to classify feed health. |
-| `requirements.txt` | Python dependencies for the audit and conversion tooling. |
+| `index.html` | The map. Static HTML/CSS/JS, no build step. Renders image and HLS feeds. Loads `cameras.json`. |
+| `cameras.json` | **Generated** unified dataset the map serves. Do not edit by hand — run `build.py`. |
+| `build.py` | Merges all source adapters into `cameras.json`. |
+| `adapters/` | One adapter per provider, all emitting the shared schema. |
+| `adapters/schema.py` | The normalized record shape + validation. |
+| `adapters/coa.py` | City of Austin adapter (JPEG snapshots). |
+| `adapters/txdot.py` | TxDOT adapter (HLS video, coordinates from MapLarge). |
+| `sources/` | Raw per-source inputs (`coa.json`, `txdot_raw.json`). |
+| `csv_to_cameras_json.py` | Converts a City CSV export into `sources/coa.json`. |
+| `audit_cameras.py` | Downloads and classifies City JPEG feeds (health check). |
+
+## Architecture
+
+```
+  City CSV ──► csv_to_cameras_json.py ──► sources/coa.json ──┐
+                                                             ├─► build.py ──► cameras.json ──► index.html
+  TxDOT MapLarge API ──► adapters/txdot.py ──► sources/txdot_raw.json ──┘
+```
+
+Every source normalizes into one record shape (`adapters/schema.py`):
+
+```json
+{
+  "id": "coa-229" | "txdot-TX_AUS_001",
+  "source": "coa" | "txdot",
+  "name": "IH-35 @ 11th",
+  "lat": 30.27, "lon": -97.73,
+  "feed": { "type": "image" | "hls", "url": "..." },
+  "status": "TURNED_ON" | "ACTIVE" | ...,
+  "meta": { "...source-specific fields shown in the popup..." }
+}
+```
+
+`feed.type` is the field the map branches on. Adding a new provider (Travis County, UT, etc.) is one new file in `adapters/` plus a line in `build.py` — no schema change.
+
+## Building the data
+
+```bash
+python3 build.py                  # rebuild cameras.json from cached sources
+python3 build.py --refresh-txdot  # re-fetch TxDOT from MapLarge first
+python3 build.py --pretty         # human-readable output
+```
+
+`build.py` validates every record (unique IDs, Texas-bounded coordinates, a usable feed URL) and prints any problems before writing.
+
+### Refreshing each source
+
+- **City of Austin** — export the traffic-camera CSV from the city open-data portal, then:
+  ```bash
+  python3 csv_to_cameras_json.py Traffic_Cameras_YYYYMMDD.csv   # writes sources/coa.json
+  python3 build.py
+  ```
+- **TxDOT** — `build.py --refresh-txdot` re-queries the MapLarge camera table for the
+  Austin district and refreshes `sources/txdot_raw.json`.
+
+Current dataset: **1,004 City** cameras + **227 TxDOT** cameras = **1,231 total**.
+Note: TxDOT's "Austin" jurisdiction is the whole district — it extends up the I-35
+corridor to the Bell County line, not just the metro.
 
 ## The map (`index.html`)
 
-Features:
+- **All sources on one map** with marker clustering, colored by source (City = green, TxDOT = blue).
+- **Source filter** — All / City / TxDOT.
+- **Search** across name, ID, route, streets, landmark, and more.
+- **Native rendering per feed:** City cameras show a JPEG snapshot; TxDOT cameras play
+  live HLS video (via [hls.js](https://github.com/video-dev/hls.js), native on Safari)
+  with a "Live" badge. The stream is torn down when the popup closes.
+- **"Locate me"** geolocation, responsive mobile panel, analytics.
 
-- **All cameras plotted** with marker clustering (Leaflet + markercluster).
-- **Status filter** — All / Turned On / Desired / Removed / Void.
-- **Search** across name, ID, landmark, streets, ATD location, signal area, and more.
-- **Live screenshot preview** in each popup, with a graceful "Preview unavailable"
-  fallback when a feed is down.
-- **"Locate me"** geolocation with a live position marker and accuracy ring.
-- **Responsive** — slide-out panel on mobile.
-- **Analytics** via Google Analytics (gtag).
-
-It is a static file. Serve the repo root with any static server:
+Serve the repo root with any static server (the map fetches `cameras.json` from the same directory):
 
 ```bash
 python3 -m http.server 8000
 # open http://localhost:8000
 ```
 
-`index.html` fetches `cameras.json` from the same directory, so both must be served
-together.
-
-## Data pipeline
-
-Camera data originates from the City of Austin's published traffic-camera dataset,
-exported as CSV. Convert it to the map's JSON with:
-
-```bash
-python3 csv_to_cameras_json.py Traffic_Cameras_YYYYMMDD.csv -o cameras.json
-```
-
-- Rows without a valid WKT `POINT (lon lat)` location are skipped (and counted).
-- Use `--pretty` for human-readable JSON; the default is compact for smaller
-  page loads.
-
-The current dataset breaks down as:
-
-| Status | Count |
-| --- | --- |
-| Turned On | 817 |
-| Desired | 124 |
-| Void | 33 |
-| Removed | 30 |
-| **Total** | **1,004** |
-
 ## Feed audit (`audit_cameras.py`)
 
-Screenshots are served from `https://cctv.austinmobility.io/image/<id>.jpg`
-(CloudFront in front of S3). The audit tool downloads each one, computes image
-metrics, and classifies the feed as live, black, blank/solid, a possible
-logo/placeholder, or an HTTP/network error. An optional second pass re-captures
-each feed after a delay to flag frozen (unchanged) frames.
-
-Setup:
+Health check for the **City JPEG feeds** — downloads each snapshot and classifies it as
+live, black, blank, a possible placeholder, or an HTTP/network error, with optional
+frozen-frame detection. TxDOT's HLS streams are **not** covered by this tool (a
+different, stream-based check would be needed).
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 python3 -m pip install -r requirements.txt
+
+python3 audit_cameras.py sources/coa.json                 # audit City feeds
+python3 audit_cameras.py sources/coa.json --save-all-images
+python3 audit_cameras.py sources/coa.json --second-pass-delay 60 --save-suspects
 ```
 
-Basic run (audits `TURNED_ON` cameras by default):
+Output lands in `camera_audit_output/` (`camera_audit.csv`, `camera_audit.json`, and
+optional `images/` / `suspect_images/`).
 
-```bash
-python3 audit_cameras.py cameras.json
-```
+> **Interpretation note:** an unchanged frame is not proof a feed is broken — a quiet
+> intersection or cached image can look static. Treat suspicious classifications as
+> review flags, not failures.
 
-Useful options:
+## Data sources
 
-```bash
-# Save a JPEG of every downloaded frame
-python3 audit_cameras.py cameras.json --save-all-images
+- **City of Austin** Transportation & Public Works traffic-camera inventory (open-data
+  portal); feeds are JPEG snapshots at `cctv.austinmobility.io`.
+- **TxDOT** Austin-district ITS cameras via the MapLarge `cameraPoint` table; feeds are
+  HLS video from `skyvdn.com`. Coordinates come from the table's `XY` geometry column.
 
-# Save only frames flagged as suspicious
-python3 audit_cameras.py cameras.json --save-suspects
-
-# Detect frozen feeds by re-capturing after 60 seconds
-python3 audit_cameras.py cameras.json --second-pass-delay 60 --save-suspects
-
-# Include DESIRED / VOID / REMOVED entries too
-python3 audit_cameras.py cameras.json --include-non-active
-```
-
-Output is written under `camera_audit_output/`:
-
-- `camera_audit.csv` and `camera_audit.json` — per-camera metrics and classification
-- `images/` — all frames (with `--save-all-images`)
-- `suspect_images/` — flagged frames (with `--save-suspects`)
-
-A recent full run of the 817 active feeds returned **810 live** and **7 hard
-`403` errors** (cameras that are forbidden on the origin for everyone, confirmed
-with `curl`).
-
-### Interpretation note
-
-An unchanged image is **not** proof that a feed is broken. A quiet intersection, a
-fixed station logo, or a cached response can all look static. Treat `unchanged_frame`
-and other suspicious classifications as review flags, not definitive failures.
-
-## Data source
-
-City of Austin Transportation & Public Works — traffic camera inventory, published
-on the city's open-data portal. Screenshots are the city's own public camera images.
-Refreshing the dataset is currently a manual export-and-convert step.
+Refreshing either source is currently a manual step.
