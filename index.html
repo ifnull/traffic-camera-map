@@ -914,6 +914,11 @@
       const linkLabel = feedType === "hls" ? "Open live stream"
         : feedType === "iframe" ? "Open live view"
         : "Open full image";
+      // A raw .m3u8 won't play in a browser tab (except Safari), so send HLS
+      // feeds to the standalone hls.js player instead of the bare URL.
+      const linkHref = feedType === "hls"
+        ? `player.html?src=${encodeURIComponent(feedUrl)}&title=${encodeURIComponent(cam.name || "")}`
+        : feedUrl;
 
       return `
         <div class="popup" data-camera-id="${escapeHtml(cam.id)}">
@@ -923,7 +928,7 @@
             <span class="source-pill ${escapeHtml(cam.source)}">${escapeHtml(SOURCE_LABELS[cam.source] || cam.source)}</span>
             ${cam.status ? `<span class="status-pill ${escapeHtml(cam.status)}">${escapeHtml(cam.status)}</span>` : ""}
             <div class="popup-meta">${rows}${coords}</div>
-            ${feedUrl ? `<a class="popup-link" href="${escapeHtml(feedUrl)}" target="_blank" rel="noopener" data-camera-id="${escapeHtml(cam.id)}" data-camera-name="${escapeHtml(cam.name)}" data-camera-source="${escapeHtml(cam.source)}">${linkLabel}</a>` : ""}
+            ${feedUrl ? `<a class="popup-link" href="${escapeHtml(linkHref)}" target="_blank" rel="noopener" data-camera-id="${escapeHtml(cam.id)}" data-camera-name="${escapeHtml(cam.name)}" data-camera-source="${escapeHtml(cam.source)}">${linkLabel}</a>` : ""}
           </div>
         </div>
       `;

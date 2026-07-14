@@ -11,6 +11,7 @@ The map (`index.html`) is a single static page that plots every camera, filters 
 | Path | Purpose |
 | --- | --- |
 | `index.html` | The map. Static HTML/CSS/JS, no build step. Renders image and HLS feeds. Loads `cameras.json`. |
+| `player.html` | Standalone hls.js player the map links to for HLS feeds (a raw `.m3u8` won't open in a browser tab). |
 | `cameras.json` | **Generated** unified dataset the map serves. Do not edit by hand — run `build.py`. |
 | `build.py` | Merges all source adapters into `cameras.json`. |
 | `adapters/` | One adapter per provider, all emitting the shared schema. |
