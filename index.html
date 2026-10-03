@@ -451,6 +451,7 @@
     }
 
     .status-pill.TURNED_ON,
+    .status-pill.ONLINE,
     .status-pill.ACTIVE { background: #d8f3e7; color: #0b6e4f; }
     .status-pill.DESIRED { background: #ffedd5; color: #9a3412; }
     .status-pill.REMOVED,
@@ -777,7 +778,7 @@
   <div class="legend">
     <strong>Source</strong>
     <div class="legend-row"><span class="dot city"></span> City of Austin (snapshot)</div>
-    <div class="legend-row"><span class="dot txdot"></span> TxDOT (live video)</div>
+    <div class="legend-row"><span class="dot txdot"></span> TxDOT (snapshot)</div>
     <div class="legend-row"><span class="dot webcam"></span> Public webcam (live)</div>
   </div>
 
@@ -815,7 +816,7 @@
     const META_LABELS = {
       code: "TxDOT ID",
       route: "Route",
-      direction: "Direction",
+      district: "TxDOT District",
       jurisdiction: "Jurisdiction",
       category: "Category",
       area: "Area",
@@ -890,6 +891,16 @@
                     style="width:100%;height:100%;border:0;background:#0f172a"></iframe>
           </div>`;
       }
+      if (feed.type === "json-image") {
+        // TxDOT answers base64-in-JSON (via a CloudFront proxy that adds CORS);
+        // loadJsonImage fetches and decodes it on popup open.
+        return `
+          <div class="popup-img-wrap">
+            <img data-json-image-url="${escapeHtml(feed.url)}" alt="Camera ${escapeHtml(cam.id)}"
+                 style="display:none" />
+            <div class="img-fallback" style="display:flex">Loading snapshot…</div>
+          </div>`;
+      }
       if (feed.url) {
         return `
           <div class="popup-img-wrap">
@@ -932,7 +943,7 @@
             <span class="source-pill ${escapeHtml(cam.source)}">${escapeHtml(SOURCE_LABELS[cam.source] || cam.source)}</span>
             ${cam.status ? `<span class="status-pill ${escapeHtml(cam.status)}">${escapeHtml(cam.status)}</span>` : ""}
             <div class="popup-meta">${rows}${coords}</div>
-            ${feedUrl ? `<a class="popup-link" href="${escapeHtml(linkHref)}" target="_blank" rel="noopener" data-camera-id="${escapeHtml(cam.id)}" data-camera-name="${escapeHtml(cam.name)}" data-camera-source="${escapeHtml(cam.source)}">${linkLabel}</a>` : ""}
+            ${feedUrl ? `<a class="popup-link" href="${escapeHtml(linkHref)}"${feedType === "json-image" ? " hidden" : ""} target="_blank" rel="noopener" data-camera-id="${escapeHtml(cam.id)}" data-camera-name="${escapeHtml(cam.name)}" data-camera-source="${escapeHtml(cam.source)}">${linkLabel}</a>` : ""}
           </div>
         </div>
       `;
@@ -978,6 +989,34 @@
 
       showStatus("Live video not supported in this browser");
       return null;
+    }
+
+    // Fetch a json-image feed, decode its base64 JPEG into a blob URL, and
+    // point the <img> and the popup's "Open full image" link at it. Returns a
+    // function that releases the blob when the popup closes.
+    function loadJsonImage(img, link) {
+      const fallback = img.nextElementSibling;
+      let blobUrl = null;
+      let closed = false;
+      fetch(img.dataset.jsonImageUrl)
+        .then((res) => (res.ok ? res.json() : Promise.reject(new Error(res.status))))
+        .then((data) => {
+          const b64 = data && data.snippet;
+          // "/9j/" is the base64 of the JPEG start-of-image marker.
+          if (typeof b64 !== "string" || !b64.startsWith("/9j/")) throw new Error("no frame");
+          const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+          if (closed) return;
+          blobUrl = URL.createObjectURL(new Blob([bytes], { type: "image/jpeg" }));
+          img.src = blobUrl;
+          img.style.display = "block";
+          fallback.style.display = "none";
+          if (link) { link.href = blobUrl; link.hidden = false; }
+        })
+        .catch(() => { fallback.textContent = "Snapshot unavailable"; });
+      return () => {
+        closed = true;
+        if (blobUrl) URL.revokeObjectURL(blobUrl);
+      };
     }
 
     const map = L.map("map", {
@@ -1168,6 +1207,7 @@
     let activeStatus = "ALL";   // City-only sub-filter; ignored unless source is City
     let searchQuery = "";
     let activeHls = null;   // Hls instance for the currently open video popup
+    let releaseSnapshot = null;  // frees the decoded TxDOT frame of the open popup
 
     function matchesFilters(cam) {
       if (activeSource !== "ALL" && cam.source !== activeSource) return false;
@@ -1224,9 +1264,14 @@
           if (iframe && !iframe.src) {
             iframe.src = iframe.dataset.embedUrl;
           }
+          const snapshot = el.querySelector("img[data-json-image-url]");
+          if (snapshot) {
+            releaseSnapshot = loadJsonImage(snapshot, el.querySelector("a.popup-link"));
+          }
         });
         marker.on("popupclose", (event) => {
           teardownHls();
+          if (releaseSnapshot) { releaseSnapshot(); releaseSnapshot = null; }
           // Clear the embed so its stream stops when the popup closes.
           const iframe = event.popup.getElement().querySelector("iframe[data-embed-url]");
           if (iframe) {
