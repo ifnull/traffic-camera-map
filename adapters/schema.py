@@ -4,25 +4,27 @@ One schema for the map, so any new feed source is just another adapter:
 
     {
       "id":     "<source>-<native id>",     # globally unique across sources
-      "source": "coa" | "txdot",
+      "source": "coa" | "txdot" | "webcam",
       "name":   "<human-readable label>",
       "lat":    float,
       "lon":    float,
-      "feed":   {"type": "image" | "hls", "url": "<url>"},
+      "feed":   {"type": "image" | "hls" | "iframe" | "json-image", "url": "<url>"},
       "status": "<source-specific status string>",
       "meta":   { ... extra source fields shown in the popup ... },
     }
 
 ``feed.type`` is the one field the map branches on: ``image`` renders as an
-``<img>`` snapshot, ``hls`` renders as a live ``<video>`` via hls.js, and
-``iframe`` renders as an embedded third-party player.
+``<img>`` snapshot, ``hls`` renders as a live ``<video>`` via hls.js,
+``iframe`` renders as an embedded third-party player, and ``json-image`` is
+a CORS-readable URL answering ``{"snippet": "<base64 jpeg>"}`` that the map
+fetches and decodes into an ``<img>``.
 """
 
 from __future__ import annotations
 
 from typing import Any, Iterable
 
-FEED_TYPES = {"image", "hls", "iframe"}
+FEED_TYPES = {"image", "hls", "iframe", "json-image"}
 SOURCES = {"coa", "txdot", "webcam"}
 
 
