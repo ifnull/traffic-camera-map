@@ -82,7 +82,7 @@ spots like Horseshoe Bay and Lockhart. The initial view frames on central Austin
 
 ## The map (`index.html`)
 
-- **All sources on one map** with marker clustering, colored by source (City = green, TxDOT = blue, Webcams = orange).
+- **All sources on one map** with marker clustering, colored by source (City = green, TxDOT = blue, Webcams = orange), over keyless OpenStreetMap tiles desaturated so the markers stand out.
 - **Source filter** — All / City / TxDOT / Webcams. City adds a contextual status sub-filter (On / Desired / Removed / Void) that only applies to City cameras.
 - **Search** across name, ID, route, streets, landmark, category, and more.
 - **Native rendering per feed:** City cameras show a JPEG snapshot; TxDOT and most
